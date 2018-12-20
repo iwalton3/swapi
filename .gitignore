@@ -1,0 +1,7 @@
+.babelrc
+node_modules/*
+server/conf.json
+server/app.py
+lib/*
+index.html
+bundle.js

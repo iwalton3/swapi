@@ -1,0 +1,18 @@
+{
+    "default_capability":"user",
+    "database":"mysql+pymysql://user:password@localhost/database",
+    "settings":{
+        "mailgun_key":"your_api_key",
+        "email":"noreply",
+        "domain":"your_email_domain",
+        "roles":{
+            "root":["admin"],
+            "admin":["user","accountmanager"],
+            "user":["view"],
+            "nobody":null
+        },
+        "default_role":"nobody",
+        "admin_email":"email_for_support",
+        "admin_user":"email_for_admin_user"
+    }
+}
