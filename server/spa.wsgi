@@ -7,7 +7,6 @@ conf = json.load(open("/etc/swa-conf.json"))
 
 api = SimpleWebAPI()
 api.upd_settings(conf["api"])
-api.default_capability = conf["default_capability"]
 database = create_engine(conf["database"], pool_recycle=3600)
 sessionManager = EmailSessionManager(api, database)
 sessionManager.upd_settings(conf["session"])

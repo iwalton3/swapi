@@ -3,7 +3,7 @@
         "default_capability":"user",
         "cookie_location":"/",
         "secure_cookies":true,
-        "cookie_name":"token",
+        "cookie_name":"token"
     },
     "database":"mysql+pymysql://user:password@localhost/database",
     "session":{
