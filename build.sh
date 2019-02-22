@@ -11,14 +11,7 @@ then
 fi
 if [[ ! -e "node_modules" ]]
 then
-    npm install --save-dev babel-cli babel-preset-env \
-                babel-plugin-syntax-async-functions \
-                babel-plugin-transform-regenerator \
-                babel-polyfill babel-preset-es2015 \
-                babel-preset-react request uglify-js \
-                babel-plugin-transform-object-rest-spread \
-                babel-plugin-transform-class-properties \
-                @babel/standalone react react-dom
+    npm install
 fi
 
 echo "'use strict';" > bundle-min.js
