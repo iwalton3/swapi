@@ -19,7 +19,8 @@ class SimpleWebAPI:
         self.check_token = lambda token: None
         self.secure_cookies = False
         self.cookie_location = "/"
-        
+        self.cookie_name = "token"
+
         @Request.application
         def application(request):
             if request.method == 'POST' and "application/json" in request.content_type.lower():
@@ -28,10 +29,10 @@ class SimpleWebAPI:
                     method = inp['method']
                     kwargs = inp.get("kwargs", {});
                     token = None 
-                    if "token" in inp:
-                        token = inp["token"]
-                    elif "token" in request.cookies:
-                        token = request.cookies["token"]
+                    if self.cookie_name in inp:
+                        token = inp[self.cookie_name]
+                    elif self.cookie_name in request.cookies:
+                        token = request.cookies[self.cookie_name]
                     user = self.check_token(token)
                     capabilities = self.get_capabilities(user)
                     if not capabilities:
@@ -58,7 +59,7 @@ class SimpleWebAPI:
                            "Message":"An exception occured while calling method '" + method + "'."}
                 response_object = Response(json.dumps(res))
                 if token:
-                    response_object.set_cookie("token", token, expires=datetime.datetime.fromtimestamp(time.time()+31557600),httponly=True,secure=self.secure_cookies, path=self.cookie_location)
+                    response_object.set_cookie(self.cookie_name, token, expires=datetime.datetime.fromtimestamp(time.time()+31557600),httponly=True,secure=self.secure_cookies, path=self.cookie_location)
                 return response_object
             else:
                 return Response(json.dumps(list(self.api_methods.keys())))
@@ -103,6 +104,9 @@ class SimpleWebAPI:
     def set_token_lookup_handler(self, function):
         self.check_token = function
         return function
+    def upd_settings(self, settings):
+        for key, value in settings.items():
+            setattr(self, key, value) 
 
 
 class EmailSessionManager:

@@ -1,7 +1,12 @@
 {
-    "default_capability":"user",
+    "api":{
+        "default_capability":"user",
+        "cookie_location":"/",
+        "secure_cookies":true,
+        "cookie_name":"token",
+    },
     "database":"mysql+pymysql://user:password@localhost/database",
-    "settings":{
+    "session":{
         "mailgun_key":"your_api_key",
         "email":"noreply",
         "domain":"your_email_domain",
