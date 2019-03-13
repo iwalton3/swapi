@@ -165,6 +165,8 @@ class EmailSessionManager:
     def token_hmac(self, token):
         # We use a fixed key here because we aren't using HMAC for signing.
         # The HMAC prevents a user with database access from stealing all active sessions.
+        if token == None:
+            token = ""
         return hmac.new(b'15d87f6ace820249cb0473df6ce51af6ca0a4721be09ad7fe91d9e644abfcc36',
                 bytes(token,'ascii'), hashlib.sha256).hexdigest()
 
@@ -201,7 +203,7 @@ class EmailSessionManager:
         Table("challenges", metadata,
               Column('id', Integer, primary_key=True),
               Column('user_id', None, ForeignKey('users.id')),
-              Column('otp', String(6), nullable=False),
+              Column('otp', String(64), nullable=False),
               Column('expire', Integer, nullable=False),
               Column('token', String(64), nullable=False),
         )
@@ -250,8 +252,9 @@ class EmailSessionManager:
     def logoff(self, details):
         token = details['token']
         tokens = self.metadata.tables['tokens']
+        token_crypt = self.token_hmac(token)
         with self.conn() as conn:
-            conn.execute(tokens.delete().where(tokens.c.token == token))
+            conn.execute(tokens.delete().where(tokens.c.token == token_crypt))
         details["token"] = None
 
     def logoff_all(self, details):
@@ -273,6 +276,8 @@ class EmailSessionManager:
     def check_otp(self, user, otp, token):
         users = self.metadata.tables['users']
         challenges = self.metadata.tables['challenges']
+        otp_crypt = binascii.b2a_hex(hashlib.pbkdf2_hmac('sha256', bytes(otp, 'ascii'), 
+            bytes(token, 'ascii'), 100000)).decode('ascii')
         token_crypt = self.token_hmac(token)
         s = (select((challenges.c.token, challenges.c.otp, challenges.c.id))
             .select_from(challenges.join(users))
@@ -285,7 +290,7 @@ class EmailSessionManager:
             result.close()
             authorized = False
             if row:
-                if row[challenges.c.otp] == otp:
+                if row[challenges.c.otp] == otp_crypt:
                     authorized = True
                 conn.execute(challenges.delete().where(challenges.c.token == token_crypt))
             conn.execute(challenges.delete().where(challenges.c.expire < time.time()))
@@ -300,9 +305,11 @@ class EmailSessionManager:
         token = binascii.b2a_hex(os.urandom(32)).decode('UTF-8')
         token_crypt = self.token_hmac(token)
         otp = binascii.b2a_hex(os.urandom(3)).decode('UTF-8')
+        otp_crypt = binascii.b2a_hex(hashlib.pbkdf2_hmac('sha256', bytes(otp, 'ascii'),
+            bytes(token, 'ascii'), 100000)).decode('ascii')
         ins = challenges.insert().values(user_id=user_info['id'],
                                          token=token_crypt,
-                                         otp=otp,
+                                         otp=otp_crypt,
                                          expire=time.time()+600)
         with self.conn() as conn:
             conn.execute(ins)
