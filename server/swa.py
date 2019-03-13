@@ -8,6 +8,8 @@ import requests
 import datetime
 from sqlalchemy import create_engine, Table, Column, Integer, String, MetaData, ForeignKey, select, and_
 from contextlib import contextmanager
+import hashlib
+import hmac
 
 class SimpleWebAPI:
     def __init__(self):
@@ -160,14 +162,21 @@ class EmailSessionManager:
         yield c
         c.close()
 
+    def token_hmac(self, token):
+        # We use a fixed key here because we aren't using HMAC for signing.
+        # The HMAC prevents a user with database access from stealing all active sessions.
+        return hmac.new(b'15d87f6ace820249cb0473df6ce51af6ca0a4721be09ad7fe91d9e644abfcc36',
+                bytes(token,'ascii'), hashlib.sha256).hexdigest()
+
     def gen_token(self, user):
-        token = binascii.b2a_hex(os.urandom(16)).decode('UTF-8')
+        token = binascii.b2a_hex(os.urandom(32)).decode('UTF-8')
         user_info = self.get_user(user)
         if not user_info:
             self.register_user(user, self.default_role)
             user_info = self.get_user(user)
         tokens = self.metadata.tables['tokens']
-        ins = tokens.insert().values(user_id=user_info['id'], token=token)
+        token_crypt = self.token_hmac(token)
+        ins = tokens.insert().values(user_id=user_info['id'], token=token_crypt)
         with self.conn() as conn:
             conn.execute(ins)
         return token
@@ -187,14 +196,14 @@ class EmailSessionManager:
         Table("tokens", metadata,
               Column('id', Integer, primary_key=True),
               Column('user_id', None, ForeignKey('users.id')),
-              Column('token', String(32), nullable=False),
+              Column('token', String(64), nullable=False),
         )
         Table("challenges", metadata,
               Column('id', Integer, primary_key=True),
               Column('user_id', None, ForeignKey('users.id')),
               Column('otp', String(6), nullable=False),
               Column('expire', Integer, nullable=False),
-              Column('token', String(32), nullable=False),
+              Column('token', String(64), nullable=False),
         )
         metadata.create_all(self.database)
 
@@ -225,9 +234,10 @@ class EmailSessionManager:
     def check_token(self, token):
         users = self.metadata.tables['users']
         tokens = self.metadata.tables['tokens']
+        token_crypt = self.token_hmac(token)
         s = (select((users.c.username, tokens.c.token))
             .select_from(tokens.join(users))
-            .where(tokens.c.token == token))
+            .where(tokens.c.token == token_crypt))
         with self.conn() as conn:
             result = conn.execute(s)
             row = result.fetchone()
@@ -263,9 +273,10 @@ class EmailSessionManager:
     def check_otp(self, user, otp, token):
         users = self.metadata.tables['users']
         challenges = self.metadata.tables['challenges']
+        token_crypt = self.token_hmac(token)
         s = (select((challenges.c.token, challenges.c.otp, challenges.c.id))
             .select_from(challenges.join(users))
-            .where(and_(challenges.c.token == token,
+            .where(and_(challenges.c.token == token_crypt,
                    users.c.username == user,
                    challenges.c.expire > time.time())))
         with self.conn() as conn:
@@ -276,7 +287,7 @@ class EmailSessionManager:
             if row:
                 if row[challenges.c.otp] == otp:
                     authorized = True
-                conn.execute(challenges.delete().where(challenges.c.token == token))
+                conn.execute(challenges.delete().where(challenges.c.token == token_crypt))
             conn.execute(challenges.delete().where(challenges.c.expire < time.time()))
         return authorized
 
@@ -286,10 +297,11 @@ class EmailSessionManager:
             self.register_user(username, self.default_role)
             user_info = self.get_user(username)
         challenges = self.metadata.tables['challenges']
-        token = binascii.b2a_hex(os.urandom(16)).decode('UTF-8')
+        token = binascii.b2a_hex(os.urandom(32)).decode('UTF-8')
+        token_crypt = self.token_hmac(token)
         otp = binascii.b2a_hex(os.urandom(3)).decode('UTF-8')
         ins = challenges.insert().values(user_id=user_info['id'],
-                                         token=token,
+                                         token=token_crypt,
                                          otp=otp,
                                          expire=time.time()+600)
         with self.conn() as conn:
