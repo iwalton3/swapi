@@ -21,7 +21,6 @@ class api:
 
     def _register_method(self, method_name):
         def method_wrapper(*args, **kwargs):
-            nonlocal method_name
             return self._call_method(method_name, *args, **kwargs)
         setattr(self, method_name, method_wrapper)
 
