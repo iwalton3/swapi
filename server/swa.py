@@ -31,8 +31,8 @@ class SimpleWebAPI:
                     method = inp['method']
                     kwargs = inp.get("kwargs", {});
                     token = None 
-                    if self.cookie_name in inp:
-                        token = inp[self.cookie_name]
+                    if "token" in inp:
+                        token = inp["token"]
                     elif self.cookie_name in request.cookies:
                         token = request.cookies[self.cookie_name]
                     user = self.check_token(token)
