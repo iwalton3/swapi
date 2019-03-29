@@ -17,7 +17,7 @@ class api:
                 data=json.dumps(call).encode('utf8'),
                 headers={"Content-Type":"application/json"},
                 method="POST")
-        return json.loads(urllib.request.urlopen(request).read())
+        return json.loads(urllib.request.urlopen(request).read().decode('utf-8'))
 
     def _register_method(self, method_name):
         def method_wrapper(*args, **kwargs):
