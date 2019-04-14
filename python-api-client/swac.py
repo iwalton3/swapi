@@ -1,6 +1,11 @@
 import json
 import urllib.request
 
+class SimpleWebAPIError(Exception):
+    def __init__(self, *args, error_name="", **kwargs):
+        super(SimpleWebAPIError, self).__init__(*args, **kwargs)
+        self.error_name = error_name
+
 class api:
     def __init__(self, url, token=None):
         self.url = url
@@ -17,7 +22,10 @@ class api:
                 data=json.dumps(call).encode('utf8'),
                 headers={"Content-Type":"application/json"},
                 method="POST")
-        return json.loads(urllib.request.urlopen(request).read().decode('utf-8'))
+        result = json.loads(urllib.request.urlopen(request).read().decode('utf-8'))
+        if type(result) == dict and "SimpleWebAPIError" in result:
+            raise SimpleWebAPIError(result.get("Message"), error_name=result.get("SimpleWebAPIError"))
+        return result
 
     def _register_method(self, method_name):
         def method_wrapper(*args, **kwargs):
@@ -28,6 +36,3 @@ class api:
         methods = self._call_method("getMethods")
         for method in methods:
             self._register_method(method)
-
-
-
