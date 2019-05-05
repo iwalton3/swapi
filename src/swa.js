@@ -13,11 +13,11 @@ function jsonRequest(url, data) {
     }
     xhr.onloadend = function (result) {
       var res = JSON.parse(result.target.response);
-      if (res != null && res.hasOwnProperty("SimpleWebAPIError")) {
-        console.log(res["Message"]);
-        reject(res);
+      if (!res.success) {
+        console.log(res.error + ": " + res.error_message);
+        reject(res.error);
       } else {
-        resolve(res);
+        resolve(res.result);
       }
     };
     xhr.send(JSON.stringify(data));
@@ -29,7 +29,7 @@ class SimpleWebAPI {
     this.url = url;
   }
   async callMethod(method, args) {
-    return await jsonRequest(this.url, {"method":method,"args":args});
+    return await jsonRequest(this.url, {"method":method,"args":args,"version":2});
   }
   async genMethods() {
     var methods = await this.callMethod("getMethods",[]);
