@@ -68,18 +68,16 @@ class SimpleWebAPI:
         
         self.application = application
 
-        @self.add
+        @self.add()
         def getMethods():
             return list(self.api_methods.keys())
 
-        @self.add
-        @self.details
+        @self.add(details=True)
         def getDetails(details):
             return {"capabilities":list(details['capabilities']),
                     "user":details['user']}
 
-        @self.add
-        @self.details
+        @self.add(details=True)
         def hasCapability(capability, details):
             return capability in details['capabilities']
 

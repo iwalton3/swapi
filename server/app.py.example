@@ -1,27 +1,23 @@
 # This is an example. Add your own functions!
 
 def init(api):
-    @api.add
-    @api.capability(None)
+    @api.add(require=None)
     def test_API():
         return "Hello world!"
 
-    @api.add
+    @api.add()
     def hello_world(text):
         return text
 
-    @api.add
-    @api.details
+    @api.add(details=True)
     def get_ip(details):
         return details["ip"]
 
-    @api.add
+    @api.add()
     def hello_world2(text):
         print(text)
 
-    @api.add
-    @api.capability(None)
-    @api.details
+    @api.add(require=None, details=True)
     def check_user(details):
         return {
             "authenticated": details["user"] != None,
