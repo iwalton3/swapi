@@ -16,6 +16,8 @@ class SimpleWebAPIError(Exception):
     def __init__(self, error_name="SimpleWebAPIError", message="An unknown error occured."):
         self.error_name = error_name
         self.message = message
+    def __str__(self):
+        return str(self.error_name) + ": " + str(self.message)
 
 class SimpleWebAPI:
     def __init__(self):
