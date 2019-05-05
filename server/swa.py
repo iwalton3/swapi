@@ -150,9 +150,32 @@ class SimpleWebAPI:
     def upd_settings(self, settings):
         for key, value in settings.items():
             setattr(self, key, value) 
+class ClassAPI:
+    def __init__(self):
+        self.api_methods = defaultdict(dict)
 
+    def add(self, require="DEFAULT_CAP", details=False, name=None):
+        """Stage a method to be added to the API. (Decorator)
+           require: Require a capability to call the function.
+           details: Request details of API call, such as user.
+           name: Use a different name for the function."""
+
+        def add_decorator(function):
+            function_name = name or function.__name__
+            self.api_methods[function_name] = {"method": function,
+                    "require": require,
+                    "details": details}
+            return function
+        return add_decorator
+
+    def commit(self, obj, api):
+        for name, conf in self.api_methods.items():
+            method = conf["method"].__get__(obj, obj.__class__)
+            api.add(require=conf["require"], details=conf["details"], name=name)(method)
 
 class EmailSessionManager:
+    capi = ClassAPI()
+
     def __init__(self, api, database):
         self.api = api
         self.print_debug = False
@@ -173,29 +196,7 @@ class EmailSessionManager:
         api.set_capability_handler(self.get_capabilities)
         api.set_token_lookup_handler(self.check_token)
 
-        api.add(self.login)
-        api.capability(None)(self.login)
-        api.details(self.login)
-        api.add(self.logoff)
-        api.capability(None)(self.logoff)
-        api.details(self.logoff)
-        api.add(self.logoff_all)
-        api.capability(None)(self.logoff_all)
-        api.details(self.logoff_all)
-        api.add(self.send_otp)
-        api.capability(None)(self.send_otp)
-        api.details(self.send_otp)
-
-        api.add(self.get_user)
-        api.capability("accountmanager")(self.get_user)
-        api.add(self.register_user)
-        api.capability("accountmanager")(self.register_user)
-        api.add(self.set_user_role)
-        api.capability("accountmanager")(self.set_user_role)
-        api.add(self.list_roles)
-        api.capability("accountmanager")(self.list_roles)
-        api.add(self.get_all_users)
-        api.capability("accountmanager")(self.get_all_users)
+        EmailSessionManager.capi.commit(self, api)
 
     @contextmanager
     def conn(self):
@@ -262,6 +263,7 @@ class EmailSessionManager:
                   "subject": subject,
                   "text": text})        
 
+    @capi.add(require="accountmanager")
     def get_user(self, username):
         users = self.metadata.tables['users']
         s = select(users.c).where(users.c.username == username)
@@ -290,6 +292,7 @@ class EmailSessionManager:
         else:
             return row[users.c.username]
 
+    @capi.add(require=None, details=True)
     def logoff(self, details):
         token = details['token']
         tokens = self.metadata.tables['tokens']
@@ -298,6 +301,7 @@ class EmailSessionManager:
             conn.execute(tokens.delete().where(tokens.c.token == token_crypt))
         details["token"] = None
 
+    @capi.add(require=None, details=True)
     def logoff_all(self, details):
         user = details['user']
         uid = self.get_user(user)['id']
@@ -306,6 +310,7 @@ class EmailSessionManager:
             conn.execute(tokens.delete().where(tokens.c.user_id == uid))
         details["token"] = None
 
+    @capi.add(require=None, details=True)
     def login(self, user, otp, details):
         if self.check_otp(user, otp, details['token']):
             token = self.gen_token(user)
@@ -337,6 +342,7 @@ class EmailSessionManager:
             conn.execute(challenges.delete().where(challenges.c.expire < time.time()))
         return authorized
 
+    @capi.add(require=None, details=True)
     def send_otp(self,username,details):
         user_info = self.get_user(username)
         if not user_info:
@@ -368,6 +374,7 @@ class EmailSessionManager:
             return None
         return self.roles.get(user_info["role"])
 
+    @capi.add(require="accountmanager")
     def register_user(self, username, role):
         if self.get_user(username):
             return
@@ -376,6 +383,7 @@ class EmailSessionManager:
         with self.conn() as conn:
             conn.execute(ins)
 
+    @capi.add(require="accountmanager")
     def set_user_role(self, username, role):
         user_info = self.get_user(username)
         if user_info:
@@ -404,9 +412,11 @@ class EmailSessionManager:
         if self.admin_user != "":
             self.register_user(self.admin_user, "root")
 
+    @capi.add(require="accountmanager")
     def list_roles(self):
         return list(self.roles.keys())
 
+    @capi.add(require="accountmanager")
     def get_all_users(self):
         users = self.metadata.tables['users']
         s = select(users.c)
