@@ -12,6 +12,11 @@ import hashlib
 import hmac
 from collections import defaultdict
 
+class SimpleWebAPIError(Exception):
+    def __init__(self, error_name="SimpleWebAPIError", message="An unknown error occured."):
+        self.error_name = error_name
+        self.message = message
+
 class SimpleWebAPI:
     def __init__(self):
         self.api_methods = defaultdict(dict)
@@ -26,6 +31,7 @@ class SimpleWebAPI:
         def application(request):
             if request.method == 'POST' and "application/json" in request.content_type.lower():
                 inp = json.loads(request.data.decode('UTF-8'))
+                api_version = inp.get("version", 1)
                 try:
                     method = inp['method']
                     conf = self.api_methods[method]
@@ -49,16 +55,31 @@ class SimpleWebAPI:
                         kwargs["details"] = details
                     require = conf["require"]
                     if require == None or require in capabilities:
-                        res = conf["method"](*inp.get("args", []), **kwargs)
+                        try:
+                            call_result = conf["method"](*inp.get("args", []), **kwargs)
+                            res = {"success":True,     
+                                   "result":call_result}
+                        except SimpleWebAPIError as ex:
+                            res = {"success":False,
+                                   "error":ex.error_name,
+                                   "error_message":ex.message}
                         if details["token"] != token:
                             token = details["token"]
                     else:
-                        res = {"SimpleWebAPIError":"NotAuthorized",
-                           "Message":"The current user cannot call method '" + method + "'."}
+                        res = {"success":False,
+                               "error":"NotAuthorized",
+                               "error_message":"The current user cannot call method '" + method + "'."}
                 except Exception as ex:
                     traceback.print_exc()
-                    res = {"SimpleWebAPIError":"Exception",
-                           "Message":"An exception occured while calling method '" + method + "'."}
+                    res = {"success":False,
+                           "error":"Exception",
+                           "error_message":"An exception occured while calling method '" + method + "'."}
+                if api_version < 2:
+                    if res["success"]:
+                        res = res["result"]
+                    else:
+                        res = {"SimpleWebAPIError":res["error"],
+                               "Message":res["error_message"]}
                 response_object = Response(json.dumps(res))
                 if token:
                     response_object.set_cookie(self.cookie_name, token, expires=datetime.datetime.fromtimestamp(time.time()+31557600),httponly=True,secure=self.secure_cookies, path=self.cookie_location)
