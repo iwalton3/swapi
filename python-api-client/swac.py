@@ -2,9 +2,11 @@ import json
 import urllib.request
 
 class SimpleWebAPIError(Exception):
-    def __init__(self, *args, error_name="", **kwargs):
-        super(SimpleWebAPIError, self).__init__(*args, **kwargs)
+    def __init__(self, error_name="SimpleWebAPIError", message="An unknown error occured."):
         self.error_name = error_name
+        self.message = message
+    def __str__(self):
+        return str(self.error_name) + ": " + str(self.message)
 
 class api:
     def __init__(self, url, token=None):
@@ -15,7 +17,8 @@ class api:
     def _call_method(self, method, *args, **kwargs):
         call = {"method":method,
                     "args":args,
-                    "kwargs":kwargs}
+                    "kwargs":kwargs,
+                    "version":2}
         if (self.token != None):
             call["token"] = self.token
         request = urllib.request.Request(self.url,
@@ -23,9 +26,9 @@ class api:
                 headers={"Content-Type":"application/json"},
                 method="POST")
         result = json.loads(urllib.request.urlopen(request).read().decode('utf-8'))
-        if type(result) == dict and "SimpleWebAPIError" in result:
-            raise SimpleWebAPIError(result.get("Message"), error_name=result.get("SimpleWebAPIError"))
-        return result
+        if not result["success"]:
+            raise SimpleWebAPIError(message=result.get("error_message"), error_name=result.get("error"))
+        return result["result"]
 
     def _register_method(self, method_name):
         def method_wrapper(*args, **kwargs):
