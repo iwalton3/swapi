@@ -10,12 +10,11 @@ from sqlalchemy import create_engine, Table, Column, Integer, String, MetaData, 
 from contextlib import contextmanager
 import hashlib
 import hmac
+from collections import defaultdict
 
 class SimpleWebAPI:
     def __init__(self):
-        self.api_methods = {}
-        self.api_security = {}
-        self.api_enable_pass = set()
+        self.api_methods = defaultdict(dict)
         self.default_capability = None
         self.get_capabilities = lambda user: None
         self.check_token = lambda token: None
@@ -29,6 +28,7 @@ class SimpleWebAPI:
                 inp = json.loads(request.data.decode('UTF-8'))
                 try:
                     method = inp['method']
+                    conf = self.api_methods[method]
                     kwargs = inp.get("kwargs", {});
                     token = None 
                     if "token" in inp:
@@ -45,11 +45,11 @@ class SimpleWebAPI:
                             "capabilities":capabilities,
                             "token":token
                             }
-                    if method in self.api_enable_pass:
+                    if conf["details"]:
                         kwargs["details"] = details
-                    required = self.api_security[method]
-                    if required == None or required in capabilities:
-                        res = self.api_methods[method](*inp.get("args", []), **kwargs)
+                    require = conf["require"]
+                    if require == None or require in capabilities:
+                        res = conf["method"](*inp.get("args", []), **kwargs)
                         if details["token"] != token:
                             token = details["token"]
                     else:
@@ -84,18 +84,38 @@ class SimpleWebAPI:
             return capability in details['capabilities']
 
     def details(self, function):
-        self.api_enable_pass.add(function.__name__)
+        """Deprecated decorator to request details."""
+        self.api_methods[function.__name__]["details"] = True
         return function
 
-    def add(self, function):
-        self.api_methods[function.__name__] = function
-        if not function.__name__ in self.api_security:
-            self.api_security[function.__name__] = self.default_capability
-        return function
+    def add(self, require="DEFAULT_CAP", details=False, name=None):
+        """Add a function to the api. (Decorator)
+           require: Require a capability to call the function.
+           details: Request details of API call, such as user.
+           name: Use a different name for the function."""
+        # The API used to use this as a "plain" decorator that
+        # added the function to the API without any settings.
+        if hasattr(require, "__call__"):
+            return self.add()(require)
 
-    def capability(self, required):
+        def add_decorator(function):
+            function_name = name or function.__name__
+            conf = self.api_methods[function_name]
+            conf["method"] = function
+            if not "require" in conf:
+                if require != "DEFAULT_CAP":
+                    conf["require"] = require
+                else:
+                    conf["require"] = self.default_capability
+            if not "details" in conf:
+                conf["details"] = details
+            return function
+        return add_decorator
+
+    def capability(self, require):
+        """Deprecated decorator to set capability."""
         def capability_decorator(function):
-            self.api_security[function.__name__] = required
+            self.api_methods[function.__name__]["require"] = require
             return function
         return capability_decorator
 
