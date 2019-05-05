@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-from swa import SimpleWebAPI, EmailSessionManager
+from swa import SimpleWebAPI
+from email_session_manager import EmailSessionManager
 from sqlalchemy import create_engine
 import json
 
