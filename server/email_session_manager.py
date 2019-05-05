@@ -1,16 +1,11 @@
-from werkzeug.wrappers import Request, Response
-import json
-import traceback
 import binascii
 import os
 import time
 import requests
-import datetime
 from sqlalchemy import create_engine, Table, Column, Integer, String, MetaData, ForeignKey, select, and_
 from contextlib import contextmanager
 import hashlib
 import hmac
-from collections import defaultdict
 from swa import ClassAPI
 
 class EmailSessionManager:
