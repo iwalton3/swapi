@@ -211,7 +211,7 @@ class EmailSessionManager:
 
     @capi.add(require="accountmanager")
     def register_user(self, username, role):
-        if self.get_user(username):
+        if self.get_user(username) or not username:
             return
         users = self.metadata.tables['users']
         ins = users.insert().values(username=username, role=role)
