@@ -4,6 +4,8 @@ import traceback
 import time
 import datetime
 from collections import defaultdict
+import swa_gen_js
+import swa_gen_py
 
 class SimpleWebAPIError(Exception):
     def __init__(self, error_name="SimpleWebAPIError", message="An unknown error occured."):
@@ -21,6 +23,7 @@ class SimpleWebAPI:
         self.secure_cookies = False
         self.cookie_location = "/"
         self.cookie_name = "token"
+        self.src_cache = {}
 
         @Request.application
         def application(request):
@@ -79,6 +82,14 @@ class SimpleWebAPI:
                 if token:
                     response_object.set_cookie(self.cookie_name, token, expires=datetime.datetime.fromtimestamp(time.time()+31557600),httponly=True,secure=self.secure_cookies, path=self.cookie_location)
                 return response_object
+            elif request.path.endswith("/.js"):
+                if "js" not in self.src_cache:
+                    self.src_cache["js"] = swa_gen_js.gen_api(self.api_methods, request.url.replace(".js", ""))
+                return Response(self.src_cache["js"])
+            elif request.path.endswith("/.py"):
+                if "py" not in self.src_cache:
+                    self.src_cache["py"] = swa_gen_py.gen_api(self.api_methods, request.url.replace(".py", ""))
+                return Response(self.src_cache["py"])
             else:
                 return Response(json.dumps(list(self.api_methods.keys())))
         
