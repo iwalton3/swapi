@@ -47,7 +47,8 @@ class SimpleWebAPI:
                             "ip":request.remote_addr,
                             "user":user,
                             "capabilities":capabilities,
-                            "token":token
+                            "token":token,
+                            "request":request
                             }
                     if conf["details"]:
                         kwargs["details"] = details
