@@ -147,6 +147,7 @@ class EmailSessionManager:
 
     @capi.add(require=None, details=True)
     def login(self, user, otp, details):
+        user = user.lower()
         if self.check_otp(user, otp, details['token']):
             token = self.gen_token(user)
             details["token"] = token
@@ -179,6 +180,7 @@ class EmailSessionManager:
 
     @capi.add(require=None, details=True)
     def send_otp(self,username,details):
+        username = username.lower()
         user_info = self.get_user(username)
         if not user_info:
             self.register_user(username, self.default_role)
@@ -211,6 +213,7 @@ class EmailSessionManager:
 
     @capi.add(require="accountmanager")
     def register_user(self, username, role):
+        username = username.lower()
         if self.get_user(username) or not username:
             return
         users = self.metadata.tables['users']
