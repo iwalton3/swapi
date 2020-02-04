@@ -5,3 +5,5 @@ server/app.py
 lib/*
 index.html
 bundle.js
+__pycache__/
+
