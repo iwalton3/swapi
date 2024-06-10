@@ -2,7 +2,7 @@ import binascii
 import os
 import time
 import requests
-from sqlalchemy import create_engine, Table, Column, Integer, String, MetaData, ForeignKey, select, and_
+from sqlalchemy import create_engine, Table, Column, Integer, String, MetaData, ForeignKey, select, and_, inspect
 from contextlib import contextmanager
 import hashlib
 import hmac
@@ -25,9 +25,9 @@ class EmailSessionManager:
         if not self.check_db_schema():
             self.gen_db_schema()
 
-        self.metadata = MetaData(self.database)
-        self.metadata.reflect()
-        
+        self.metadata = MetaData()
+        self.metadata.reflect(self.database)
+
         api.set_capability_handler(self.get_capabilities)
         api.set_token_lookup_handler(self.check_token)
 
@@ -61,12 +61,12 @@ class EmailSessionManager:
         return token
 
     def check_db_schema(self):
-        return (self.database.dialect.has_table(self.database, "tokens") and
-                self.database.dialect.has_table(self.database, "users") and
-                self.database.dialect.has_table(self.database, "challenges"))
+        return (inspect(self.database).has_table("tokens") and
+            inspect(self.database).has_table("users") and
+            inspect(self.database).has_table("challenges"))
 
     def gen_db_schema(self):
-        metadata = MetaData(self.database)
+        metadata = MetaData()
         Table("users", metadata,
               Column('id', Integer, primary_key=True),
               Column('username', String(320)),
@@ -96,7 +96,7 @@ class EmailSessionManager:
             data={"from": "No Reply <"+self.email+"@"+self.domain+">",
                   "to": [recipient],
                   "subject": subject,
-                  "text": text})        
+                  "text": text})
 
     @capi.add(require="accountmanager")
     def get_user(self, username):
@@ -109,7 +109,7 @@ class EmailSessionManager:
         if not row:
             return False
         else:
-            return dict(row)
+            return row._mapping
 
     def check_token(self, token):
         users = self.metadata.tables['users']
@@ -125,7 +125,7 @@ class EmailSessionManager:
         if not row:
             return None
         else:
-            return row[users.c.username]
+            return row._mapping[users.c.username]
 
     @capi.add(require=None, details=True)
     def logoff(self, details):
@@ -158,7 +158,7 @@ class EmailSessionManager:
     def check_otp(self, user, otp, token):
         users = self.metadata.tables['users']
         challenges = self.metadata.tables['challenges']
-        otp_crypt = binascii.b2a_hex(hashlib.pbkdf2_hmac('sha256', bytes(otp, 'ascii'), 
+        otp_crypt = binascii.b2a_hex(hashlib.pbkdf2_hmac('sha256', bytes(otp, 'ascii'),
             bytes(token, 'ascii'), 100000)).decode('ascii')
         token_crypt = self.token_hmac(token)
         s = (select((challenges.c.token, challenges.c.otp, challenges.c.id))
@@ -172,7 +172,7 @@ class EmailSessionManager:
             result.close()
             authorized = False
             if row:
-                if row[challenges.c.otp] == otp_crypt:
+                if row._mapping[challenges.c.otp] == otp_crypt:
                     authorized = True
                 conn.execute(challenges.delete().where(challenges.c.token == token_crypt))
             conn.execute(challenges.delete().where(challenges.c.expire < time.time()))
@@ -241,7 +241,7 @@ class EmailSessionManager:
         for role_exp in roles[role]:
             flat_roles.update(self.recurse_roles(roles, role_exp, visited))
         return flat_roles
-        
+
     def upd_settings(self, settings):
         for key, value in settings.items():
             setattr(self, key, value)

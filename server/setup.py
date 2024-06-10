@@ -4,7 +4,7 @@ import os
 setup(
     name='swapi',
     version='1.0.0',
-    author="Ian Walton",
+    author="Izzie Walton",
     author_email="iwalton3@gmail.com",
     description="New template for making applications on iwalton.com.",
     license='LGPLv3',
