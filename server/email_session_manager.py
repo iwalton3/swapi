@@ -2,7 +2,7 @@ import binascii
 import os
 import time
 import requests
-from sqlalchemy import create_engine, Table, Column, Integer, String, MetaData, ForeignKey, select, and_, inspect
+from sqlalchemy import create_engine, Table, Column, Integer, String, MetaData, ForeignKey, select, and_, inspect, update
 from contextlib import contextmanager
 import hashlib
 import hmac
@@ -33,12 +33,6 @@ class EmailSessionManager:
 
         EmailSessionManager.capi.commit(self, api)
 
-    @contextmanager
-    def conn(self):
-        c = self.database.connect()
-        yield c
-        c.close()
-
     def token_hmac(self, token):
         # We use a fixed key here because we aren't using HMAC for signing.
         # The HMAC prevents a user with database access from stealing all active sessions.
@@ -56,7 +50,7 @@ class EmailSessionManager:
         tokens = self.metadata.tables['tokens']
         token_crypt = self.token_hmac(token)
         ins = tokens.insert().values(user_id=user_info['id'], token=token_crypt)
-        with self.conn() as conn:
+        with self.database.begin() as conn:
             conn.execute(ins)
         return token
 
@@ -102,7 +96,7 @@ class EmailSessionManager:
     def get_user(self, username):
         users = self.metadata.tables['users']
         s = select(users.c).where(users.c.username == username)
-        with self.conn() as conn:
+        with self.database.begin() as conn:
             result = conn.execute(s)
             row = result.fetchone()
             result.close()
@@ -115,10 +109,10 @@ class EmailSessionManager:
         users = self.metadata.tables['users']
         tokens = self.metadata.tables['tokens']
         token_crypt = self.token_hmac(token)
-        s = (select((users.c.username, tokens.c.token))
+        s = (select(users.c.username, tokens.c.token)
             .select_from(tokens.join(users))
             .where(tokens.c.token == token_crypt))
-        with self.conn() as conn:
+        with self.database.begin() as conn:
             result = conn.execute(s)
             row = result.fetchone()
             result.close()
@@ -132,7 +126,7 @@ class EmailSessionManager:
         token = details['token']
         tokens = self.metadata.tables['tokens']
         token_crypt = self.token_hmac(token)
-        with self.conn() as conn:
+        with self.database.begin() as conn:
             conn.execute(tokens.delete().where(tokens.c.token == token_crypt))
         details["token"] = None
 
@@ -141,7 +135,7 @@ class EmailSessionManager:
         user = details['user']
         uid = self.get_user(user)['id']
         tokens = self.metadata.tables['tokens']
-        with self.conn() as conn:
+        with self.database.begin() as conn:
             conn.execute(tokens.delete().where(tokens.c.user_id == uid))
         details["token"] = None
 
@@ -161,12 +155,12 @@ class EmailSessionManager:
         otp_crypt = binascii.b2a_hex(hashlib.pbkdf2_hmac('sha256', bytes(otp, 'ascii'),
             bytes(token, 'ascii'), 100000)).decode('ascii')
         token_crypt = self.token_hmac(token)
-        s = (select((challenges.c.token, challenges.c.otp, challenges.c.id))
+        s = (select(challenges.c.token, challenges.c.otp, challenges.c.id)
             .select_from(challenges.join(users))
             .where(and_(challenges.c.token == token_crypt,
                    users.c.username == user,
                    challenges.c.expire > time.time())))
-        with self.conn() as conn:
+        with self.database.begin() as conn:
             result = conn.execute(s)
             row = result.fetchone()
             result.close()
@@ -195,7 +189,7 @@ class EmailSessionManager:
                                          token=token_crypt,
                                          otp=otp_crypt,
                                          expire=time.time()+600)
-        with self.conn() as conn:
+        with self.database.begin() as conn:
             conn.execute(ins)
         details['token'] = token
         self.send_email(username, "Email Login Code",
@@ -218,7 +212,7 @@ class EmailSessionManager:
             return
         users = self.metadata.tables['users']
         ins = users.insert().values(username=username, role=role)
-        with self.conn() as conn:
+        with self.database.begin() as conn:
             conn.execute(ins)
 
     @capi.add(require="accountmanager")
@@ -226,9 +220,10 @@ class EmailSessionManager:
         user_info = self.get_user(username)
         if user_info:
             users = self.metadata.tables['users']
-            upd = (users.update().values(role=role)
-                   .where(users.c.id == user_info['id']))
-            with self.conn() as conn:
+            upd = (update(users)
+                   .where(users.c.id == user_info['id'])
+                   .values(role=role))
+            with self.database.begin() as conn:
                 conn.execute(upd)
 
     def recurse_roles(self, roles, role, visited=None):
@@ -258,9 +253,9 @@ class EmailSessionManager:
     def get_all_users(self):
         users = self.metadata.tables['users']
         s = select(users.c)
-        with self.conn() as conn:
+        with self.database.begin() as conn:
             result = conn.execute(s)
-            response = [dict(x) for x in result]
+            response = [dict(x._mapping) for x in result]
             result.close()
         return response
 
